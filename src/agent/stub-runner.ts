@@ -17,6 +17,7 @@ export interface StubToolCall {
 export interface StubScript {
   match: string | RegExp;
   mode?: RunRequest["mode"];
+  stage?: RunRequest["stage"];
   callTools?: StubToolCall[];
   execute?: (options: OpenSessionOptions) => Promise<void> | void;
   result: Omit<RunResult, "status"> & { status?: RunResult["status"] };
@@ -49,7 +50,8 @@ class StubSession implements AgentSession {
     const index = this.scripts.findIndex(
       (script) =>
         matches(script.match, request.prompt) &&
-        (script.mode === undefined || script.mode === request.mode),
+        (script.mode === undefined || script.mode === request.mode) &&
+        (script.stage === undefined || script.stage === request.stage),
     );
     if (index === -1) {
       throw new Error(

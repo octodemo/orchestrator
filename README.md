@@ -34,6 +34,7 @@ select the Copilot runner:
 ```dotenv
 AGENT_RUNNER=copilot
 COPILOT_MODEL=gpt-5
+# COPILOT_MODEL_PROVIDER=copilot
 # Optional: use an explicit token instead of the logged-in Copilot/gh user.
 # COPILOT_GITHUB_TOKEN=github-token
 # COPILOT_LOG_LEVEL=warning
@@ -90,7 +91,49 @@ npm run triage -- \
 
 Use `--dashboard-port 4400`, `INCIDENT_DASHBOARD=true`, or
 `INCIDENT_DASHBOARD_PORT=4400` to change how it is enabled. The server binds to
-localhost only.
+localhost only. Open the **Models** screen to choose the provider and model used
+for assessment, investigation, and action. Selections are persisted in
+`.incident-orchestrator/model-settings.json`, validated when saved, and
+revalidated immediately before each stage runs.
+
+### BYOK providers
+
+The model screen includes GitHub Copilot plus any configured OpenAI, Anthropic,
+or Microsoft Foundry providers. Credentials remain server-side and are never
+returned to the browser. Set a comma-separated `*_MODELS` variable to provide a
+fixed deployment list; otherwise OpenAI-compatible and Anthropic providers use
+their model-list endpoints.
+
+OpenAI:
+
+```dotenv
+OPENAI_API_KEY=...
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_WIRE_API=responses
+OPENAI_MODELS=gpt-5.2,gpt-5.2-codex
+```
+
+Anthropic:
+
+```dotenv
+ANTHROPIC_API_KEY=...
+ANTHROPIC_BASE_URL=https://api.anthropic.com
+ANTHROPIC_MODELS=claude-sonnet-4.6
+```
+
+Microsoft Foundry with an OpenAI-compatible `/openai/v1/` endpoint:
+
+```dotenv
+AZURE_FOUNDRY_PROVIDER_TYPE=openai
+AZURE_FOUNDRY_BASE_URL=https://resource.openai.azure.com/openai/v1/
+AZURE_FOUNDRY_API_KEY=...
+AZURE_FOUNDRY_WIRE_API=responses
+AZURE_FOUNDRY_MODELS=gpt-5.2-codex
+```
+
+Native Azure endpoints use `AZURE_FOUNDRY_PROVIDER_TYPE=azure`; optionally set
+`AZURE_FOUNDRY_API_VERSION`. Native endpoints require
+`AZURE_FOUNDRY_MODELS` because they do not expose a uniform model-list API.
 
 ## Emerald Osprey queue worker
 
@@ -221,8 +264,10 @@ environment opt-in.
 Set `AGENT_RUNNER=stub` in `.env` to use deterministic fixture scripts instead.
 
 The Copilot SDK bundles its CLI runtime for Node.js. It uses the logged-in
-Copilot user by default, or `COPILOT_GITHUB_TOKEN` when explicitly configured.
-Read-only stages run in plan mode and the fix stage runs in autopilot mode.
+Copilot user by default, `COPILOT_GITHUB_TOKEN` when explicitly configured, or
+provider-specific BYOK credentials for OpenAI, Anthropic, and Microsoft
+Foundry/Azure OpenAI. Read-only stages run in plan mode and the fix stage runs
+in autopilot mode.
 Custom read-only incident tools skip permission prompts; built-in and mutating
 tools use the SDK permission handler. Per-session `allowTools` and `denyTools`
 are mapped to Copilot's `availableTools` and `excludedTools`.

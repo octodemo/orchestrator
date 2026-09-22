@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-import { makeAgentRunner } from "./agent/index.js";
+import {
+  makeAgentRunner,
+  makeModelConfiguration,
+} from "./agent/index.js";
 import {
   dashboardConfig,
   optionalNumber,
@@ -21,7 +24,11 @@ import {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const runner = makeAgentRunner({ stubScripts: incidentScripts });
+  const models = makeModelConfiguration(process.env, process.cwd());
+  const runner = makeAgentRunner({
+    models,
+    stubScripts: incidentScripts,
+  });
   const queueOptions = queueWorkerConfig(args, process.env);
   const publication = publishingConfig(args, process.env);
   const workspaceOptions = workspaceConfig(
@@ -44,7 +51,10 @@ async function main(): Promise<void> {
         });
   const dashboardOptions = dashboardConfig(args, process.env);
   const dashboard = dashboardOptions.enabled
-    ? new TriageDashboardServer({ port: dashboardOptions.port })
+    ? new TriageDashboardServer({
+        port: dashboardOptions.port,
+        models,
+      })
     : undefined;
   const abortController = new AbortController();
   const stop = (signal: NodeJS.Signals) => {

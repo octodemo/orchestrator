@@ -1,11 +1,21 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { ModelConfiguration } from "../src/agent/model-config.js";
 import { TriageDashboardServer } from "../src/dashboard/server.js";
 import { IncidentRecord } from "../src/pipeline/types.js";
 
 const servers: TriageDashboardServer[] = [];
+const directories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) => server.close()));
+  await Promise.all([
+    ...servers.splice(0).map((server) => server.close()),
+    ...directories
+      .splice(0)
+      .map((path) => rm(path, { recursive: true })),
+  ]);
 });
 
 function record(state: IncidentRecord["state"]): IncidentRecord {
@@ -43,12 +53,80 @@ describe("TriageDashboardServer", () => {
     expect(page).toContain("Resume polling");
     expect(page).toContain("color-scheme: dark");
     expect(page).toContain('id="agent-event"');
+    expect(page).toContain('id="models-screen"');
+    expect(page).toContain("Stage models");
     expect(page).not.toContain('id="events"');
     expect(page).not.toContain("renderEvents");
     expect(page).not.toContain("record?.events");
     expect(state.record).toMatchObject({
       state: "investigating",
       input: { id: "incident-demo" },
+    });
+  });
+
+  it("serves and updates validated stage model settings", async () => {
+      const directory = await mkdtemp(join(tmpdir(), "dashboard-models-"));
+      directories.push(directory);
+      const models = new ModelConfiguration({
+        env: {
+          COPILOT_MODELS: "gpt-5,gpt-5.4",
+          COPILOT_MODEL: "gpt-5",
+          ANTHROPIC_API_KEY: "secret",
+          ANTHROPIC_MODELS: "claude-sonnet-4.6",
+        },
+        path: join(directory, "models.json"),
+      });
+      const server = new TriageDashboardServer({ port: 0, models });
+      servers.push(server);
+      const url = await server.start();
+
+      const catalog = await fetch(`${url}/api/models`).then((response) =>
+        response.json(),
+      );
+      expect(catalog.settings.assessment).toEqual({
+        provider: "copilot",
+        model: "gpt-5",
+      });
+      expect(catalog.providers).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "anthropic",
+            configured: true,
+            models: [
+              {
+                id: "claude-sonnet-4.6",
+                name: "claude-sonnet-4.6",
+              },
+            ],
+          }),
+        ]),
+      );
+
+      const response = await fetch(`${url}/api/models`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          assessment: { provider: "copilot", model: "gpt-5.4" },
+          investigation: {
+            provider: "anthropic",
+            model: "claude-sonnet-4.6",
+          },
+          action: {
+            provider: "anthropic",
+            model: "claude-sonnet-4.6",
+          },
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        settings: {
+          assessment: { provider: "copilot", model: "gpt-5.4" },
+          action: {
+            provider: "anthropic",
+            model: "claude-sonnet-4.6",
+          },
+        },
     });
   });
 

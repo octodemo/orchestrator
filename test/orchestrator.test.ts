@@ -21,6 +21,7 @@ function successfulScripts(): StubScript[] {
     {
       match: "Decide the autonomy ceiling",
       mode: "plan",
+      stage: "assessment",
       result: {
         text: json({
           type: "logic",
@@ -35,6 +36,7 @@ function successfulScripts(): StubScript[] {
     {
       match: "root-cause hypothesis",
       mode: "plan",
+      stage: "investigation",
       result: {
         text: json({
           rootCause: "exclusive boundary",
@@ -48,6 +50,7 @@ function successfulScripts(): StubScript[] {
     {
       match: "durable fix",
       mode: "agent",
+      stage: "action",
       result: {
         text: json({
           status: "fixed",
@@ -119,6 +122,7 @@ describe("triageIncident", () => {
     scripts.splice(1, 0, {
       match: "Return corrected JSON only",
       mode: "plan",
+      stage: "assessment",
       result: {
         text: json({
           type: "logic",

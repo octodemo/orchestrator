@@ -49,6 +49,7 @@ Create `/path/to/orchestrator/.env`:
 ```dotenv
 AGENT_RUNNER=copilot
 COPILOT_MODEL=gpt-5
+# COPILOT_MODEL_PROVIDER=copilot
 # Optional: use an explicit token instead of the logged-in Copilot/gh user.
 # COPILOT_GITHUB_TOKEN=github-token
 # COPILOT_LOG_LEVEL=warning
@@ -147,7 +148,10 @@ http://127.0.0.1:4317
 ```
 
 The dashboard shows the current triage stage and only the current live agent
-operation. It does not replay a list of past tool calls.
+operation. It does not replay a list of past tool calls. Use the **Models**
+screen to set the OpenAI, Anthropic, Azure Foundry, or GitHub Copilot model for
+each stage. The worker validates saved selections and checks availability again
+before each stage starts.
 
 ## 6. Submit the season issue
 
