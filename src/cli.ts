@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
-import { makeAgentRunner } from "./agent/index.js";
+import {
+  makeAgentRunner,
+  makeModelConfiguration,
+} from "./agent/index.js";
 import {
   dashboardConfig,
   optionalNumber,
@@ -29,12 +32,19 @@ async function main(): Promise<void> {
     report: required(args, "report"),
     cwd,
   };
-  const runner = makeAgentRunner({ stubScripts: incidentScripts });
+  const models = makeModelConfiguration(process.env, process.cwd());
+  const runner = makeAgentRunner({
+    models,
+    stubScripts: incidentScripts,
+  });
   const store = defaultStore(cwd);
   const publication = publishingConfig(args, process.env);
   const dashboardOptions = dashboardConfig(args, process.env);
   const dashboard = dashboardOptions.enabled
-    ? new TriageDashboardServer({ port: dashboardOptions.port })
+    ? new TriageDashboardServer({
+        port: dashboardOptions.port,
+        models,
+      })
     : undefined;
   if (dashboard) {
     const url = await dashboard.start();

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { makeAgentRunner } from "../src/agent/index.js";
+import {
+  makeAgentRunner,
+  makeModelConfiguration,
+} from "../src/agent/index.js";
 
 const stubScripts = () => [];
 
@@ -18,13 +21,13 @@ describe("makeAgentRunner", () => {
 
   it("rejects invalid Copilot log levels", () => {
     expect(() =>
-      makeAgentRunner({
-        env: {
+      makeModelConfiguration(
+        {
           AGENT_RUNNER: "copilot",
           COPILOT_LOG_LEVEL: "verbose",
         },
-        stubScripts,
-      }),
+        process.cwd(),
+      ).copilotClientOptions(),
     ).toThrow(
       "COPILOT_LOG_LEVEL must be one of none, error, warning, info, debug, or all",
     );

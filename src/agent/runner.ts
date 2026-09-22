@@ -16,6 +16,7 @@ export type AgentMode = "plan" | "agent";
 export interface RunRequest {
   prompt: string;
   mode?: AgentMode;
+  stage: AgentStage;
 }
 
 export interface RunUsage {
@@ -58,3 +59,4 @@ export interface AgentRunner {
   readonly kind: "stub" | "copilot";
   open(options: OpenSessionOptions): Promise<AgentSession>;
 }
+import { AgentStage } from "./model-config.js";

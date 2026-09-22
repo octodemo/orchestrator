@@ -84,8 +84,9 @@ export async function triageIncident(
     const send = async (
       prompt: string,
       mode: "plan" | "agent",
+      stage: "assessment" | "investigation" | "action",
     ): Promise<RunResult> => {
-      const result = await activeSession.run({ prompt, mode }, (event) => {
+      const result = await activeSession.run({ prompt, mode, stage }, (event) => {
         record.events.push({
           at: now(),
           kind: `event:${event.type}`,
@@ -106,9 +107,10 @@ export async function triageIncident(
     const parseStage = async <T>(
       prompt: string,
       mode: "plan" | "agent",
+      stage: "assessment" | "investigation" | "action",
       parse: (text: string) => T,
     ): Promise<{ value: T; result: RunResult }> => {
-      const result = await send(prompt, mode);
+      const result = await send(prompt, mode, stage);
       try {
         return { value: parse(result.text), result };
       } catch (error) {
@@ -116,6 +118,7 @@ export async function triageIncident(
         const repaired = await send(
           repairPrompt(prompt, result.text, error.message),
           "plan",
+          stage,
         );
         try {
           return { value: parse(repaired.text), result };
@@ -143,6 +146,7 @@ export async function triageIncident(
     const assessment = await parseStage(
       assessPrompt(input),
       "plan",
+      "assessment",
       parseAssessment,
     );
     record.assessment = assessment.value;
@@ -150,8 +154,9 @@ export async function triageIncident(
 
     if (record.assessment.autonomy === "escalate_only") {
       const evidence = await parseStage(
-        gatherEvidencePrompt(input),
+        gatherEvidencePrompt(input, record.assessment),
         "plan",
+        "investigation",
         parseFixClaim,
       );
       record.claim = evidence.value;
@@ -162,8 +167,9 @@ export async function triageIncident(
 
     move("investigating");
     const hypothesis = await parseStage(
-      investigatePrompt(input),
+      investigatePrompt(input, record.assessment),
       "plan",
+      "investigation",
       parseHypothesis,
     );
     record.hypothesis = hypothesis.value;
@@ -173,6 +179,7 @@ export async function triageIncident(
     const claim = await parseStage(
       actPrompt(input, record.hypothesis),
       "agent",
+      "action",
       parseFixClaim,
     );
     record.claim = claim.value;

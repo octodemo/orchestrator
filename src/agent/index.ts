@@ -2,12 +2,14 @@ import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { resolve } from "node:path";
 import { CopilotAgentRunner } from "./copilot-runner.js";
+import { ModelConfiguration } from "./model-config.js";
 import { AgentRunner } from "./runner.js";
 import { StubAgentRunner, StubScriptFactory } from "./stub-runner.js";
 
 export interface MakeAgentRunnerOptions {
   env?: NodeJS.ProcessEnv;
   envFile?: string | false;
+  models?: ModelConfiguration;
   stubScripts: StubScriptFactory;
 }
 
@@ -22,13 +24,24 @@ export function makeAgentRunner(options: MakeAgentRunnerOptions): AgentRunner {
     throw new Error(`Unsupported AGENT_RUNNER value: ${kind}`);
   }
 
-  const logLevel = copilotLogLevel(env.COPILOT_LOG_LEVEL);
   return new CopilotAgentRunner({
-    model: env.COPILOT_MODEL ?? "gpt-5",
-    ...(env.COPILOT_GITHUB_TOKEN
-      ? { gitHubToken: env.COPILOT_GITHUB_TOKEN }
-      : {}),
-    ...(logLevel ? { logLevel } : {}),
+    models:
+      options.models ??
+      makeModelConfiguration(env, process.cwd()),
+  });
+}
+
+export function makeModelConfiguration(
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+): ModelConfiguration {
+  return new ModelConfiguration({
+    env,
+    path: resolve(
+      cwd,
+      ".incident-orchestrator",
+      "model-settings.json",
+    ),
   });
 }
 
@@ -38,25 +51,7 @@ function loadOptionalEnvironmentFile(envFile: string | false | undefined): void 
   if (existsSync(path)) loadEnvFile(path);
 }
 
-function copilotLogLevel(
-  value: string | undefined,
-): "none" | "error" | "warning" | "info" | "debug" | "all" | undefined {
-  if (value === undefined) return undefined;
-  if (
-    value === "none" ||
-    value === "error" ||
-    value === "warning" ||
-    value === "info" ||
-    value === "debug" ||
-    value === "all"
-  ) {
-    return value;
-  }
-  throw new Error(
-    "COPILOT_LOG_LEVEL must be one of none, error, warning, info, debug, or all",
-  );
-}
-
 export * from "./runner.js";
 export * from "./stub-runner.js";
 export * from "./copilot-runner.js";
+export * from "./model-config.js";

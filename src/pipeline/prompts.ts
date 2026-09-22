@@ -1,4 +1,9 @@
-import { FixClaim, Hypothesis, IncidentInput } from "./types.js";
+import {
+  Assessment,
+  FixClaim,
+  Hypothesis,
+  IncidentInput,
+} from "./types.js";
 
 const jsonOnly = `
 Return one fenced JSON object and no prose outside the fence.
@@ -26,13 +31,19 @@ Return:
 ${jsonOnly}`;
 }
 
-export function investigatePrompt(input: IncidentInput): string {
+export function investigatePrompt(
+  input: IncidentInput,
+  assessment: Assessment,
+): string {
   return `Investigate this incident in plan mode and produce a root-cause hypothesis.
 Use the supplied read-only tools to inspect the report, recent commits, code,
 tests, and live pool status when relevant. Do not modify files.
 
 Incident id: ${input.id}
 Trigger: ${input.trigger}
+Assessment type: ${assessment.type}
+Severity: ${assessment.severity}
+Assessment rationale: ${assessment.rationale}
 Report or fixture path:
 ${input.report}
 
@@ -72,11 +83,17 @@ Return:
 ${jsonOnly}`;
 }
 
-export function gatherEvidencePrompt(input: IncidentInput): string {
+export function gatherEvidencePrompt(
+  input: IncidentInput,
+  assessment: Assessment,
+): string {
   return `Gather a read-only evidence packet for incident ${input.id}.
 Do not modify files or execute remediation. Summarize the affected area and
 recommend the next human action.
 
+Assessment type: ${assessment.type}
+Severity: ${assessment.severity}
+Assessment rationale: ${assessment.rationale}
 Report or fixture path:
 ${input.report}
 

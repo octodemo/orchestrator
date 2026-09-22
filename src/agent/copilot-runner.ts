@@ -15,39 +15,81 @@ import {
   RunResult,
   RunUsage,
 } from "./runner.js";
+import { ModelConfiguration } from "./model-config.js";
+import { randomUUID } from "node:crypto";
 
 const RUN_TIMEOUT_MS = 30 * 60_000;
 
 export interface CopilotRunnerConfig {
-  model: string;
-  gitHubToken?: string;
-  logLevel?: "none" | "error" | "warning" | "info" | "debug" | "all";
+  models: ModelConfiguration;
 }
 
 class CopilotAgentSession implements AgentSession {
-  readonly id: string;
+  readonly id = `copilot-${randomUUID()}`;
   private usage: RunUsage = emptyUsage();
 
   constructor(
-    private readonly client: CopilotClient,
-    private readonly session: CopilotSession,
-  ) {
-    this.id = session.sessionId;
-  }
+    private readonly config: CopilotRunnerConfig,
+    private readonly options: OpenSessionOptions,
+  ) {}
 
   async run(
     request: RunRequest,
     onEvent?: (event: RunEvent) => void,
   ): Promise<RunResult> {
-    await this.session.rpc.mode.set({
+    const model = await this.config.models.resolve(request.stage);
+    const client = new CopilotClient({
+      ...this.config.models.copilotClientOptions(),
+      workingDirectory: this.options.cwd,
+    });
+    await client.start();
+
+    try {
+      const session = await client.createSession({
+        clientName: "incident-orchestrator",
+        model: model.model,
+        workingDirectory: this.options.cwd,
+        streaming: true,
+        onPermissionRequest: approveAll,
+        ...(model.providerConfig
+          ? { provider: model.providerConfig }
+          : {}),
+        ...(this.options.tools
+          ? { tools: makeTools(this.options.tools) }
+          : {}),
+        ...(this.options.allowTools
+          ? { availableTools: this.options.allowTools }
+          : {}),
+        ...(this.options.denyTools
+          ? { excludedTools: this.options.denyTools }
+          : {}),
+      });
+      try {
+        return await this.runSession(session, request, onEvent);
+      } finally {
+        await session.disconnect();
+      }
+    } finally {
+      const errors = await client.stop();
+      if (errors.length > 0) {
+        throw new AggregateError(errors, "Failed to stop Copilot client");
+      }
+    }
+  }
+
+  private async runSession(
+    session: CopilotSession,
+    request: RunRequest,
+    onEvent?: (event: RunEvent) => void,
+  ): Promise<RunResult> {
+    await session.rpc.mode.set({
       mode: request.mode === "agent" ? "autopilot" : "plan",
     });
-
     let runUsage = emptyUsage();
     let error: string | undefined;
     let cancelled = false;
     const toolNames = new Map<string, string>();
-    const unsubscribe = this.session.on((event) => {
+    const unsubscribe = session.on((event) => {
       const normalized = normalizeEvent(event, toolNames);
       if (normalized) onEvent?.(normalized);
 
@@ -67,12 +109,11 @@ class CopilotAgentSession implements AgentSession {
     });
 
     try {
-      const response = await this.session.sendAndWait(
+      const response = await session.sendAndWait(
         { prompt: request.prompt },
         RUN_TIMEOUT_MS,
       );
       this.usage = addUsage(this.usage, runUsage);
-
       if (cancelled) {
         return {
           text: response?.data.content ?? "",
@@ -113,16 +154,7 @@ class CopilotAgentSession implements AgentSession {
     return { ...this.usage };
   }
 
-  async dispose(): Promise<void> {
-    try {
-      await this.session.disconnect();
-    } finally {
-      const errors = await this.client.stop();
-      if (errors.length > 0) {
-        throw new AggregateError(errors, "Failed to stop Copilot client");
-      }
-    }
-  }
+  async dispose(): Promise<void> {}
 }
 
 export class CopilotAgentRunner implements AgentRunner {
@@ -131,43 +163,20 @@ export class CopilotAgentRunner implements AgentRunner {
   constructor(private readonly config: CopilotRunnerConfig) {}
 
   async open(options: OpenSessionOptions): Promise<AgentSession> {
-    const client = new CopilotClient({
-      workingDirectory: options.cwd,
-      logLevel: this.config.logLevel ?? "warning",
-      ...(this.config.gitHubToken
-        ? { gitHubToken: this.config.gitHubToken }
-        : {}),
-    });
-    await client.start();
-
-    try {
-      const tools = options.tools
-        ? Object.entries(options.tools).map(([name, tool]) =>
-            defineTool<Record<string, JsonValue>>(name, {
-              description: tool.description,
-              parameters: tool.inputSchema,
-              handler: (args) => tool.execute(args),
-              skipPermission: tool.readOnly ?? false,
-              defer: "never",
-            }),
-          )
-        : undefined;
-      const session = await client.createSession({
-        clientName: "incident-orchestrator",
-        model: this.config.model,
-        workingDirectory: options.cwd,
-        streaming: true,
-        onPermissionRequest: approveAll,
-        ...(tools ? { tools } : {}),
-        ...(options.allowTools ? { availableTools: options.allowTools } : {}),
-        ...(options.denyTools ? { excludedTools: options.denyTools } : {}),
-      });
-      return new CopilotAgentSession(client, session);
-    } catch (error) {
-      await client.stop();
-      throw error;
-    }
+    return new CopilotAgentSession(this.config, options);
   }
+}
+
+function makeTools(tools: NonNullable<OpenSessionOptions["tools"]>) {
+  return Object.entries(tools).map(([name, tool]) =>
+    defineTool<Record<string, JsonValue>>(name, {
+      description: tool.description,
+      parameters: tool.inputSchema,
+      handler: (args) => tool.execute(args),
+      skipPermission: tool.readOnly ?? false,
+      defer: "never",
+    }),
+  );
 }
 
 function normalizeEvent(
