@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cursor/sdk": "1.0.31"
+    "@github/copilot-sdk": "1.0.14"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

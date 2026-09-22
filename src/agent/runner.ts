@@ -55,6 +55,6 @@ export interface OpenSessionOptions {
 }
 
 export interface AgentRunner {
-  readonly kind: "stub" | "cursor";
+  readonly kind: "stub" | "copilot";
   open(options: OpenSessionOptions): Promise<AgentSession>;
 }

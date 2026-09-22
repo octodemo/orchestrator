@@ -7,15 +7,16 @@ assess -> investigate -> act -> independently verify -> publish outcome
 ```
 
 The implementation keeps the agent runtime behind an `AgentRunner` interface.
-Development and tests use a deterministic stub; production runs use the Cursor
-SDK local runtime.
+Development and tests use a deterministic stub; production runs use the GitHub
+Copilot SDK runtime.
 
 ## Requirements
 
 - Node.js 22.13 or newer
 - npm
 - A clean target repository with Vitest installed
-- A Cursor API key for real agent runs
+- A GitHub Copilot subscription or supported BYOK configuration for real agent
+  runs
 - GitHub CLI authentication with push and issue/pull-request access when
   publishing is enabled
 
@@ -28,14 +29,14 @@ npm run typecheck
 ```
 
 Copy `.env.example` to `.env` if the local file is not already present, then
-set the API key:
+select the Copilot runner:
 
 ```dotenv
-AGENT_RUNNER=cursor
-CURSOR_API_KEY=your-key
-CURSOR_MODEL=composer-2.5
-CURSOR_SANDBOX=true
-CURSOR_AUTO_REVIEW=true
+AGENT_RUNNER=copilot
+COPILOT_MODEL=gpt-5
+# Optional: use an explicit token instead of the logged-in Copilot/gh user.
+# COPILOT_GITHUB_TOKEN=github-token
+# COPILOT_LOG_LEVEL=warning
 INCIDENT_PUBLISH=false
 INCIDENT_PUBLISH_BASE=main
 INCIDENT_GITHUB_REMOTE=origin
@@ -109,7 +110,7 @@ The one-shot `triage` command is unchanged. The worker reuses its runner, token
 budget, verification, optional GitHub publication, JSON incident store, and
 dashboard behavior. In managed mode it creates a clean, attempt-scoped branch
 and worktree for each claimed incident. The Emerald server checkout remains
-untouched while Cursor edits, verification runs, and publication occurs in the
+untouched while Copilot edits, verification runs, and publication occurs in the
 managed worktree. Serial processing remains the default even though incidents
 are isolated.
 
@@ -219,11 +220,12 @@ environment opt-in.
 
 Set `AGENT_RUNNER=stub` in `.env` to use deterministic fixture scripts instead.
 
-Cursor local agents run with the SDK sandbox and Auto-review enabled by
-default. The SDK no longer exposes the draft design's per-session
-`allowTools`/`denyTools` options, so the adapter rejects those options rather
-than silently ignoring them. Repository-level hooks and permissions remain the
-hard policy boundary for built-in Cursor tools.
+The Copilot SDK bundles its CLI runtime for Node.js. It uses the logged-in
+Copilot user by default, or `COPILOT_GITHUB_TOKEN` when explicitly configured.
+Read-only stages run in plan mode and the fix stage runs in autopilot mode.
+Custom read-only incident tools skip permission prompts; built-in and mutating
+tools use the SDK permission handler. Per-session `allowTools` and `denyTools`
+are mapped to Copilot's `availableTools` and `excludedTools`.
 
 ## Verification
 
@@ -269,7 +271,7 @@ non-zero.
 
 ```text
 src/
-  agent/       AgentRunner boundary and stub/Cursor implementations
+  agent/       AgentRunner boundary and stub/Copilot implementations
   config/      CLI and publication configuration parsing
   pipeline/    state machine, prompts, schemas, verification, orchestration
   publisher/   injectable host-side GitHub outcome publication
