@@ -13,11 +13,7 @@ export const agentStages = [
 ] as const;
 
 export type AgentStage = (typeof agentStages)[number];
-export type ModelProvider =
-  | "copilot"
-  | "openai"
-  | "anthropic"
-  | "azure-foundry";
+export type ModelProvider = "copilot" | "azure-foundry";
 
 export interface StageModelSelection {
   provider: ModelProvider;
@@ -97,14 +93,7 @@ export class ModelConfiguration {
 
   async listProviders(): Promise<ProviderModels[]> {
     return Promise.all(
-      (
-        [
-          "copilot",
-          "openai",
-          "anthropic",
-          "azure-foundry",
-        ] as const
-      ).map(async (provider) => {
+      (["copilot", "azure-foundry"] as const).map(async (provider) => {
         try {
           return {
             id: provider,
@@ -164,15 +153,7 @@ export class ModelConfiguration {
     if (environment.configuredModels) {
       return environment.configuredModels;
     }
-    if (
-      provider === "azure-foundry" &&
-      environment.providerConfig.type === "azure"
-    ) {
-      throw new Error(
-        "AZURE_FOUNDRY_MODELS is required for native Azure endpoints",
-      );
-    }
-    return this.fetchProviderModels(provider, environment.providerConfig);
+    return this.fetchProviderModels(environment.providerConfig);
   }
 
   copilotClientOptions(): CopilotClientOptions {
@@ -207,39 +188,10 @@ export class ModelConfiguration {
   }
 
   private providerEnvironment(
-    provider: Exclude<ModelProvider, "copilot">,
+    _provider: Exclude<ModelProvider, "copilot">,
   ): ProviderEnvironment {
     const env = this.options.env;
-    if (provider === "openai") {
-      const apiKey = requiredEnv(env.OPENAI_API_KEY, "OPENAI_API_KEY");
-      const models = configuredModels(env.OPENAI_MODELS);
-      return {
-        providerConfig: {
-          type: "openai",
-          baseUrl: env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
-          apiKey,
-          wireApi: parseWireApi(env.OPENAI_WIRE_API) ?? "responses",
-        },
-        ...(models ? { configuredModels: models } : {}),
-      };
-    }
-    if (provider === "anthropic") {
-      const apiKey = requiredEnv(
-        env.ANTHROPIC_API_KEY,
-        "ANTHROPIC_API_KEY",
-      );
-      const models = configuredModels(env.ANTHROPIC_MODELS);
-      return {
-        providerConfig: {
-          type: "anthropic",
-          baseUrl: env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com",
-          apiKey,
-        },
-        ...(models ? { configuredModels: models } : {}),
-      };
-    }
-
-    const baseUrl = requiredEnv(
+    const configuredUrl = requiredEnv(
       env.AZURE_FOUNDRY_BASE_URL,
       "AZURE_FOUNDRY_BASE_URL",
     );
@@ -247,42 +199,30 @@ export class ModelConfiguration {
       env.AZURE_FOUNDRY_API_KEY,
       "AZURE_FOUNDRY_API_KEY",
     );
-    const type = parseAzureProviderType(
-      env.AZURE_FOUNDRY_PROVIDER_TYPE,
-    );
-    const apiVersion = env.AZURE_FOUNDRY_API_VERSION;
+    const endpoint = normalizeFoundryEndpoint(configuredUrl);
     const models = configuredModels(env.AZURE_FOUNDRY_MODELS);
     return {
       providerConfig: {
-        type,
-        baseUrl,
+        type: "openai",
+        baseUrl: endpoint.baseUrl,
         apiKey,
         wireApi:
-          parseWireApi(env.AZURE_FOUNDRY_WIRE_API) ?? "responses",
-        ...(type === "azure" && apiVersion
-          ? { azure: { apiVersion } }
-          : {}),
+          parseWireApi(env.AZURE_FOUNDRY_WIRE_API) ??
+          endpoint.wireApi ??
+          "responses",
       },
       ...(models ? { configuredModels: models } : {}),
     };
   }
 
   private async fetchProviderModels(
-    provider: Exclude<ModelProvider, "copilot">,
     config: ProviderConfig,
   ): Promise<AvailableModel[]> {
-    const url = modelListUrl(provider, config.baseUrl);
-    const headers: Record<string, string> = { accept: "application/json" };
-    if (config.apiKey) {
-      if (provider === "anthropic") {
-        headers["x-api-key"] = config.apiKey;
-        headers["anthropic-version"] = "2023-06-01";
-      } else if (provider === "azure-foundry") {
-        headers["api-key"] = config.apiKey;
-      } else {
-        headers.authorization = `Bearer ${config.apiKey}`;
-      }
-    }
+    const url = modelListUrl(config.baseUrl);
+    const headers: Record<string, string> = {
+      accept: "application/json",
+      ...(config.apiKey ? { "api-key": config.apiKey } : {}),
+    };
     const response = await this.fetch(url, {
       headers,
       signal: AbortSignal.timeout(10_000),
@@ -290,7 +230,7 @@ export class ModelConfiguration {
     const body = await response.text();
     if (!response.ok) {
       throw new Error(
-        `${providerName(provider)} model discovery returned ${response.status}: ${body.slice(0, 500)}`,
+        `Azure Foundry model discovery returned ${response.status}: ${body.slice(0, 500)}`,
       );
     }
     const parsed: unknown = JSON.parse(body);
@@ -301,7 +241,7 @@ export class ModelConfiguration {
       !Array.isArray(parsed.data)
     ) {
       throw new Error(
-        `${providerName(provider)} model discovery returned an invalid response`,
+        "Azure Foundry model discovery returned an invalid response",
       );
     }
     return parsed.data
@@ -368,8 +308,6 @@ function parseSettings(value: unknown): StageModelSettings {
 function parseProvider(value: unknown): ModelProvider {
   if (
     value === "copilot" ||
-    value === "openai" ||
-    value === "anthropic" ||
     value === "azure-foundry"
   ) {
     return value;
@@ -392,16 +330,28 @@ function configuredModels(
   return models;
 }
 
-function modelListUrl(
-  provider: Exclude<ModelProvider, "copilot">,
-  baseUrl: string,
-): string {
+function modelListUrl(baseUrl: string): string {
   const url = new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
-  if (provider === "anthropic" && !url.pathname.endsWith("/v1/")) {
-    url.pathname = `${url.pathname.replace(/\/$/, "")}/v1/`;
-  }
   url.pathname = `${url.pathname.replace(/\/$/, "")}/models`;
   return url.toString();
+}
+
+function normalizeFoundryEndpoint(value: string): {
+  baseUrl: string;
+  wireApi?: "completions" | "responses";
+} {
+  const url = new URL(value);
+  const path = url.pathname.replace(/\/+$/, "");
+  if (path.endsWith("/chat/completions")) {
+    url.pathname = `${path.slice(0, -"/chat/completions".length)}/`;
+    return { baseUrl: url.toString(), wireApi: "completions" };
+  }
+  if (path.endsWith("/responses")) {
+    url.pathname = `${path.slice(0, -"/responses".length)}/`;
+    return { baseUrl: url.toString(), wireApi: "responses" };
+  }
+  url.pathname = `${path}/`;
+  return { baseUrl: url.toString() };
 }
 
 function parseWireApi(
@@ -410,16 +360,6 @@ function parseWireApi(
   if (value === undefined) return undefined;
   if (value === "completions" || value === "responses") return value;
   throw new Error("Wire API must be completions or responses");
-}
-
-function parseAzureProviderType(
-  value: string | undefined,
-): "openai" | "azure" {
-  if (value === undefined || value === "openai") return "openai";
-  if (value === "azure") return "azure";
-  throw new Error(
-    "AZURE_FOUNDRY_PROVIDER_TYPE must be openai or azure",
-  );
 }
 
 function parseLogLevel(
@@ -445,12 +385,8 @@ function providerName(provider: ModelProvider): string {
   switch (provider) {
     case "copilot":
       return "GitHub Copilot";
-    case "openai":
-      return "OpenAI";
-    case "anthropic":
-      return "Anthropic";
     case "azure-foundry":
-      return "Azure Foundry";
+      return "Azure Foundry (BYOK)";
   }
 }
 
