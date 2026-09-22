@@ -29,38 +29,57 @@ describe("ModelConfiguration", () => {
     const { directory, models } = await configuration({
       COPILOT_MODELS: "gpt-5,gpt-5.4",
       COPILOT_MODEL: "gpt-5",
-      OPENAI_API_KEY: "secret",
-      OPENAI_MODELS: "gpt-5.2,gpt-5.2-codex",
     });
 
     const saved = await models.updateSettings({
       assessment: { provider: "copilot", model: "gpt-5.4" },
-      investigation: { provider: "openai", model: "gpt-5.2" },
-      action: { provider: "openai", model: "gpt-5.2-codex" },
+      investigation: { provider: "copilot", model: "gpt-5" },
+      action: { provider: "copilot", model: "gpt-5.4" },
     });
 
-    expect(saved.action.model).toBe("gpt-5.2-codex");
+    expect(saved.action.model).toBe("gpt-5.4");
     await expect(
       readFile(join(directory, "model-settings.json"), "utf8"),
-    ).resolves.toContain('"provider": "openai"');
+    ).resolves.toContain('"provider": "copilot"');
   });
 
   it("rejects a model that the selected provider does not support", async () => {
     const { models } = await configuration({
       COPILOT_MODELS: "gpt-5",
-      OPENAI_API_KEY: "secret",
-      OPENAI_MODELS: "gpt-5.2",
+      AZURE_FOUNDRY_BASE_URL:
+        "https://example.services.ai.azure.com/openai/v1/chat/completions",
+      AZURE_FOUNDRY_API_KEY: "secret",
+      AZURE_FOUNDRY_MODELS: "gpt-5.2",
     });
 
     await expect(
       models.updateSettings({
         assessment: { provider: "copilot", model: "gpt-5" },
-        investigation: { provider: "openai", model: "claude-sonnet" },
-        action: { provider: "openai", model: "gpt-5.2" },
+        investigation: {
+          provider: "azure-foundry",
+          model: "claude-sonnet",
+        },
+        action: { provider: "azure-foundry", model: "gpt-5.2" },
       }),
     ).rejects.toThrow(
-      "Model claude-sonnet is not available from OpenAI",
+      "Model claude-sonnet is not available from Azure Foundry (BYOK)",
     );
+  });
+
+  it("exposes only Copilot and Azure Foundry as model sources", async () => {
+    const { models } = await configuration({
+      COPILOT_MODELS: "gpt-5.4,claude-sonnet-5",
+      AZURE_FOUNDRY_BASE_URL:
+        "https://octodemo-models.services.ai.azure.com/openai/v1/chat/completions",
+      AZURE_FOUNDRY_API_KEY: "secret",
+      AZURE_FOUNDRY_MODELS: "gpt-5.2-codex",
+    });
+
+    await expect(
+      models.listProviders().then((providers) =>
+        providers.map((provider) => provider.id),
+      ),
+    ).resolves.toEqual(["copilot", "azure-foundry"]);
   });
 
   it("resolves Azure Foundry OpenAI-compatible BYOK configuration", async () => {
@@ -68,7 +87,7 @@ describe("ModelConfiguration", () => {
       COPILOT_MODEL_PROVIDER: "azure-foundry",
       COPILOT_MODEL: "gpt-5.2-codex",
       AZURE_FOUNDRY_BASE_URL:
-        "https://example.openai.azure.com/openai/v1/",
+        "https://octodemo-models.services.ai.azure.com/openai/v1/chat/completions",
       AZURE_FOUNDRY_API_KEY: "secret",
       AZURE_FOUNDRY_MODELS: "gpt-5.2-codex",
     });
@@ -78,8 +97,9 @@ describe("ModelConfiguration", () => {
       model: "gpt-5.2-codex",
       providerConfig: {
         type: "openai",
-        baseUrl: "https://example.openai.azure.com/openai/v1/",
-        wireApi: "responses",
+        baseUrl:
+          "https://octodemo-models.services.ai.azure.com/openai/v1/",
+        wireApi: "completions",
       },
     });
   });

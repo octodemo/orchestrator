@@ -71,8 +71,10 @@ describe("TriageDashboardServer", () => {
         env: {
           COPILOT_MODELS: "gpt-5,gpt-5.4",
           COPILOT_MODEL: "gpt-5",
-          ANTHROPIC_API_KEY: "secret",
-          ANTHROPIC_MODELS: "claude-sonnet-4.6",
+          AZURE_FOUNDRY_BASE_URL:
+            "https://octodemo-models.services.ai.azure.com/openai/v1/chat/completions",
+          AZURE_FOUNDRY_API_KEY: "secret",
+          AZURE_FOUNDRY_MODELS: "gpt-5.2-codex",
         },
         path: join(directory, "models.json"),
       });
@@ -90,12 +92,12 @@ describe("TriageDashboardServer", () => {
       expect(catalog.providers).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            id: "anthropic",
+            id: "azure-foundry",
             configured: true,
             models: [
               {
-                id: "claude-sonnet-4.6",
-                name: "claude-sonnet-4.6",
+                id: "gpt-5.2-codex",
+                name: "gpt-5.2-codex",
               },
             ],
           }),
@@ -108,12 +110,12 @@ describe("TriageDashboardServer", () => {
         body: JSON.stringify({
           assessment: { provider: "copilot", model: "gpt-5.4" },
           investigation: {
-            provider: "anthropic",
-            model: "claude-sonnet-4.6",
+            provider: "azure-foundry",
+            model: "gpt-5.2-codex",
           },
           action: {
-            provider: "anthropic",
-            model: "claude-sonnet-4.6",
+            provider: "azure-foundry",
+            model: "gpt-5.2-codex",
           },
         }),
       });
@@ -123,8 +125,8 @@ describe("TriageDashboardServer", () => {
         settings: {
           assessment: { provider: "copilot", model: "gpt-5.4" },
           action: {
-            provider: "anthropic",
-            model: "claude-sonnet-4.6",
+            provider: "azure-foundry",
+            model: "gpt-5.2-codex",
           },
         },
     });

@@ -149,9 +149,11 @@ http://127.0.0.1:4317
 
 The dashboard shows the current triage stage and only the current live agent
 operation. It does not replay a list of past tool calls. Use the **Models**
-screen to set the OpenAI, Anthropic, Azure Foundry, or GitHub Copilot model for
-each stage. The worker validates saved selections and checks availability again
-before each stage starts.
+screen to choose a model from the GitHub Copilot catalog or the optional Azure
+Foundry BYOK connection for each stage. OpenAI and Anthropic models remain
+GitHub Copilot model choices rather than separate BYOK providers. The worker
+validates saved selections and checks availability again before each stage
+starts.
 
 ## 6. Submit the season issue
 
