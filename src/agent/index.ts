@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { resolve } from "node:path";
-import { CursorAgentRunner } from "./cursor-runner.js";
+import { CopilotAgentRunner } from "./copilot-runner.js";
 import { AgentRunner } from "./runner.js";
 import { StubAgentRunner, StubScriptFactory } from "./stub-runner.js";
 
@@ -18,18 +18,17 @@ export function makeAgentRunner(options: MakeAgentRunnerOptions): AgentRunner {
   const env = options.env ?? process.env;
   const kind = env.AGENT_RUNNER ?? "stub";
   if (kind === "stub") return new StubAgentRunner(options.stubScripts);
-  if (kind !== "cursor") {
+  if (kind !== "copilot") {
     throw new Error(`Unsupported AGENT_RUNNER value: ${kind}`);
   }
 
-  const apiKey = env.CURSOR_API_KEY;
-  if (!apiKey) throw new Error("CURSOR_API_KEY is required for AGENT_RUNNER=cursor");
-
-  return new CursorAgentRunner({
-    apiKey,
-    model: env.CURSOR_MODEL ?? "composer-2.5",
-    sandbox: env.CURSOR_SANDBOX !== "false",
-    autoReview: env.CURSOR_AUTO_REVIEW !== "false",
+  const logLevel = copilotLogLevel(env.COPILOT_LOG_LEVEL);
+  return new CopilotAgentRunner({
+    model: env.COPILOT_MODEL ?? "gpt-5",
+    ...(env.COPILOT_GITHUB_TOKEN
+      ? { gitHubToken: env.COPILOT_GITHUB_TOKEN }
+      : {}),
+    ...(logLevel ? { logLevel } : {}),
   });
 }
 
@@ -39,6 +38,25 @@ function loadOptionalEnvironmentFile(envFile: string | false | undefined): void 
   if (existsSync(path)) loadEnvFile(path);
 }
 
+function copilotLogLevel(
+  value: string | undefined,
+): "none" | "error" | "warning" | "info" | "debug" | "all" | undefined {
+  if (value === undefined) return undefined;
+  if (
+    value === "none" ||
+    value === "error" ||
+    value === "warning" ||
+    value === "info" ||
+    value === "debug" ||
+    value === "all"
+  ) {
+    return value;
+  }
+  throw new Error(
+    "COPILOT_LOG_LEVEL must be one of none, error, warning, info, debug, or all",
+  );
+}
+
 export * from "./runner.js";
 export * from "./stub-runner.js";
-export * from "./cursor-runner.js";
+export * from "./copilot-runner.js";

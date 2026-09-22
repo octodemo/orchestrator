@@ -9,7 +9,7 @@ issue and pull request produced by a successful fix.
 - Node.js 22.13 or newer
 - npm
 - Git and GitHub CLI
-- A Cursor API key
+- A GitHub Copilot subscription
 - Push, issue, and pull-request access to `chetbackiewicz/emerald-osprey`
 - Local checkouts of:
   - `chetbackiewicz/emerald-osprey`
@@ -47,11 +47,11 @@ npm install
 Create `/path/to/orchestrator/.env`:
 
 ```dotenv
-AGENT_RUNNER=cursor
-CURSOR_API_KEY=your-cursor-api-key
-CURSOR_MODEL=composer-2.5
-CURSOR_SANDBOX=true
-CURSOR_AUTO_REVIEW=true
+AGENT_RUNNER=copilot
+COPILOT_MODEL=gpt-5
+# Optional: use an explicit token instead of the logged-in Copilot/gh user.
+# COPILOT_GITHUB_TOKEN=github-token
+# COPILOT_LOG_LEVEL=warning
 
 INCIDENT_PUBLISH=true
 INCIDENT_PUBLISH_BASE=main
@@ -123,7 +123,7 @@ npm run worker -- \
   --dashboard-port 4317
 ```
 
-The worker loads `.env`, uses the Cursor runner, polls one incident at a time,
+The worker loads `.env`, uses the Copilot runner, polls one incident at a time,
 creates an isolated workspace from the immutable commit resolved by
 `--target-ref`, and publishes verified outcomes to
 `chetbackiewicz/emerald-osprey`. For normal incidents use `origin/main` instead
@@ -202,7 +202,7 @@ For a verified fix, the orchestrator independently checks:
 2. The reproduction test passes with the agent's changes.
 3. The complete Emerald test suite passes with the agent's changes.
 
-The terminal record should contain real Cursor token usage and request IDs.
+The terminal record should contain real Copilot token usage and request IDs.
 The Emerald issue page intentionally hides those internal agent details and
 shows only the user-facing status, concise outcome, and publication links.
 
